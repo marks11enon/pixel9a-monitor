@@ -14,9 +14,11 @@ NTFY_TOPIC（環境変数）の値はログに出さない。
 import argparse
 import datetime
 import json
+import re
 import os
 import sys
 import traceback
+import urllib.error
 import urllib.request
 
 JST = datetime.timezone(datetime.timedelta(hours=9))
@@ -67,10 +69,14 @@ def send_ntfy(title, message, priority, click, dry_run):
     if dry_run:
         print(f"[dry-run] 送信予定: title={title} priority={priority}\n{message}")
         return True
-    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    raw = os.environ.get("NTFY_TOPIC", "")
+    # 改行・BOM など、トピックに使えない文字を除く（ntfy のトピックは英数字・-・_ のみ）
+    topic = re.sub(r"[^A-Za-z0-9_-]", "", raw)
     if not topic:
         print("NTFY_TOPIC が未設定のため送信できません")
         return False
+    if topic != raw:
+        print(f"NTFY_TOPIC から使えない文字を {len(raw) - len(topic)} 文字除きました")
     body = {"topic": topic, "title": title, "message": message,
             "priority": {"default": 3, "high": 4}.get(priority, 3)}
     if click:
@@ -83,6 +89,14 @@ def send_ntfy(title, message, priority, click, dry_run):
             ok = 200 <= r.status < 300
             print(f"ntfy 送信: {title} -> HTTP {r.status}")
             return ok
+    except urllib.error.HTTPError as e:
+        # ntfy のエラー本文（理由）だけ出す。トピック名は出さない
+        try:
+            reason = json.loads(e.read().decode("utf-8", "replace")).get("error", "")
+        except Exception:
+            reason = ""
+        print(f"ntfy 送信失敗: {title} (HTTP {e.code} {reason.replace(topic, '***')})")
+        return False
     except Exception as e:
         # 例外メッセージに URL・トピックが入らないよう型名だけ出す
         print(f"ntfy 送信失敗: {title} ({type(e).__name__})")
