@@ -1,11 +1,36 @@
 # pixel9a-monitor
 
-Google ストアの「Google Pixel 9a［認定整備済品］」の在庫を GitHub Actions で約5分ごとに確認し、
+Google ストアの「Google Pixel 9a［認定整備済品］」の在庫を約5分ごとに確認し、
 購入できる構成が出たら ntfy でスマホに通知します。PC の常時起動は不要です。
 
 ページは読むだけで、カート追加・購入・フォーム送信は一切しません。
 
-## 仕組み
+## 現在の構成（2026-11-02〜）
+
+```
+Google Apps Script（5分ごと）  ── 判定 ──>  入荷・異常のときだけ
+  gas/Code.gs                               GitHub API で notify ワークフローを起動
+                                                   │
+GitHub Actions  .github/workflows/notify.yml  ──>  ntfy.sh  ──>  iPhone
+```
+
+- **判定（GAS）**: ページの HTML を取得し、ページ内の SKU データと schema.org の在庫表示が
+  両方「在庫あり」の構成だけを入荷とみなす。食い違えば確認不可（unknown）。
+  状態は GAS のスクリプト プロパティ `STATE` に保存。
+- **通知（GitHub 経由）**: GAS から ntfy に直接送ると Google の共用サーバーのため HTTP 429 で断られるので、
+  GitHub の notify ワークフローに中継してもらう。GitHub を使うのは通知のときだけ。
+- **GAS のプロジェクト**: script.google.com の「Pixel9a在庫監視」。
+  スクリプト プロパティ `GITHUB_TOKEN` に Fine-grained token（pixel9a-monitor 限定・Actions 読み書きのみ、
+  **期限 2027-11-01**）を保存。期限が来たら GitHub で Regenerate して貼り替える。
+- 止め方: GAS で `removeTriggers` を実行（または GAS の「トリガー」画面で削除）。
+
+以下は最初に作った GitHub Actions 版（Playwright でボタンまで確認する方式）の説明です。
+GitHub の定期実行が動かない不具合と、Actions の利用規約（ソフトウェア開発と関係ない用途の制限）への懸念から、
+GAS 版が安定したら停止する予定です。
+
+---
+
+## 仕組み（GitHub Actions 版）
 
 1. `.github/workflows/monitor.yml` が約5分ごとに起動
    - **リレー方式（主）**: 各回の最後に、開始から約5分たったら次の回を起動する（`gh workflow run`）。
