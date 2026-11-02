@@ -1,0 +1,16 @@
+# 切り分け用：定期実行（schedule）がこのリポジトリで動くかだけを確認する最小構成。
+# 原因が分かったら削除する。
+name: schedule-probe
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "schedule probe ${{ github.event_name }} $(date -u)"
