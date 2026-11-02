@@ -2,7 +2,8 @@ name: monitor
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # 毎時0分の混雑を避けて 2,7,12,…分に起動（5分間隔）
+    - cron: "2-59/5 * * * *"
   workflow_dispatch:
     inputs:
       test_notify:
