@@ -1,0 +1,52 @@
+# GAS（Google Apps Script）からの合図を受けて ntfy に通知を送る。
+# GAS は Google の共用サーバーから送るため ntfy に断られる（HTTP 429）。GitHub から送れば届く。
+# 起動は GAS が GitHub API（workflow_dispatch）で行う。手動テストも可:
+#   gh workflow run notify.yml -R marks11enon/pixel9a-monitor -f title=テスト -f message=本文
+name: notify
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "通知のタイトル"
+        required: true
+        type: string
+      message:
+        description: "通知の本文"
+        required: true
+        type: string
+      priority:
+        description: "優先度（1〜5、入荷は4）"
+        required: false
+        type: string
+        default: "3"
+
+permissions: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Send to ntfy
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TITLE: ${{ inputs.title }}
+          MESSAGE: ${{ inputs.message }}
+          PRIORITY: ${{ inputs.priority }}
+          CLICK: "https://store.google.com/jp/config/refurbished_pixel_9a?hl=ja&selections=eyJwcm9kdWN0RmFtaWx5IjoiY21WbWRYSmlhWE5vWldSZmNHbDRaV3hmT1dFPSJ9"
+        run: |
+          topic=$(printf '%s' "$NTFY_TOPIC" | tr -cd 'A-Za-z0-9_-')
+          case "$PRIORITY" in 1|2|3|4|5) ;; *) PRIORITY=3 ;; esac
+          body=$(jq -n --arg t "$topic" --arg ti "$TITLE" --arg m "$MESSAGE" \
+                       --argjson p "$PRIORITY" --arg c "$CLICK" \
+                       '{topic:$t, title:$ti, message:$m, priority:$p, click:$c}')
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 20 \
+                   -H 'Content-Type: application/json' -d "$body" https://ntfy.sh/)
+            echo "ntfy 送信: $TITLE -> HTTP $code"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::ntfy に送信できませんでした"
+          exit 1
