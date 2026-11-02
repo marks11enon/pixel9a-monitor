@@ -7,7 +7,12 @@ Google ストアの「Google Pixel 9a［認定整備済品］」の在庫を Git
 
 ## 仕組み
 
-1. `.github/workflows/monitor.yml` が5分ごと（GitHub の都合で遅延・抜けあり）に起動
+1. `.github/workflows/monitor.yml` が約5分ごとに起動
+   - **リレー方式（主）**: 各回の最後に、開始から約5分たったら次の回を起動する（`gh workflow run`）。
+     待機中・実行中の回が他にあれば起動しない（二重化防止）。
+   - **定期実行（予備）**: cron `2-59/5 * * * *`。GitHub 側で定期実行が動かない不具合が報告されているため予備扱い。
+     リレーが途切れても、定期実行が動けばそこから再開する。
+   - リレーが途切れて定期実行も動かないときは、手動で1回起動すれば再開する（下記「手動実行」）。
 2. `monitor.py` が Playwright でページを毎回新しく開き、構成（色×容量）ごとに次をすべて満たすか確認
    - 色と容量が選択状態になる / その状態でカートボタンが有効
    - ページ内の SKU データと schema.org がともに在庫あり / 表示価格とデータ上の価格が一致
@@ -50,7 +55,7 @@ gh run list -R marks11enon/pixel9a-monitor --workflow monitor.yml               
 
 ## 止め方
 
-GitHub のリポジトリ → Actions → monitor → 右上「…」→ Disable workflow。
+GitHub のリポジトリ → Actions → monitor → 右上「…」→ Disable workflow（リレーも止まる）。
 またはコマンド: `gh workflow disable monitor.yml -R marks11enon/pixel9a-monitor`
 （再開は `gh workflow enable`）
 
