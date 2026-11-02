@@ -22,6 +22,9 @@ GitHub Actions  .github/workflows/notify.yml  ──>  ntfy.sh  ──>  iPhone
 - **GAS のプロジェクト**: script.google.com の「Pixel9a在庫監視」。
   スクリプト プロパティ `GITHUB_TOKEN` に Fine-grained token（pixel9a-monitor 限定・Actions 読み書きのみ、
   **期限 2027-11-01**）を保存。期限が来たら GitHub で Regenerate して貼り替える。
+- **稼働報告**: 毎朝8時台に ntfy へ【稼働報告】（前回報告からの確認回数・正常/確認不可の内訳・最終確認時刻・現在の状態）。
+  5分ごとなら24時間で約288回。届かない日があれば GAS が止まっている。
+- 動作の確認: GAS の「実行数」画面に、5分ごとの checkStock（時間主導型）が並ぶ。
 - 止め方: GAS で `removeTriggers` を実行（または GAS の「トリガー」画面で削除）。
 
 以下は最初に作った GitHub Actions 版（Playwright でボタンまで確認する方式）の説明です。

@@ -11,7 +11,7 @@
  *  0. スクリプト プロパティに GITHUB_TOKEN を保存（pixel9a-monitor 限定・Actions 読み書きのみのトークン）
  *  1. testNotify を実行 → iPhone の ntfy に【テスト通知】が届くか確認
  *  2. checkStock を実行 → 実行ログで判定結果を確認
- *  3. setupTrigger を実行 → 5分ごとの自動実行を登録
+ *  3. setupTrigger を実行 → 5分ごとの確認と、毎朝の稼働報告（dailyReport）を登録
  * 止め方: removeTriggers を実行（または「トリガー」画面で削除）
  */
 
@@ -19,6 +19,8 @@ var URL = 'https://store.google.com/jp/config/refurbished_pixel_9a?hl=ja&selecti
   'eyJwcm9kdWN0RmFtaWx5IjoiY21WbWRYSmlhWE5vWldSZmNHbDRaV3hmT1dFPSJ9';
 var TITLE_STOCK = '【入荷】Pixel 9a 整備済品';
 var TITLE_PROBLEM = '【監視の問題】';
+var TITLE_REPORT = '【稼働報告】Pixel 9a 在庫監視';
+var REPORT_HOUR = 8;  // 毎朝この時台（日本時間）に稼働報告
 var TEST_MESSAGE = '【テスト通知】Pixel 9a在庫監視の通知経路テストです（入荷ではありません）';
 var UNKNOWN_ALERT_HOURS = 24;
 var NOTIFY_API = 'https://api.github.com/repos/marks11enon/pixel9a-monitor/actions/workflows/notify.yml/dispatches';
@@ -112,6 +114,37 @@ function decide(state, res, now) {
   return { state: st, msgs: msgs };
 }
 
+/** 確認1回ぶんを稼働カウンタに足す（副作用なし） */
+function countRun(state, status) {
+  var st = JSON.parse(JSON.stringify(state));
+  var c = st.runs || { total: 0, ok: 0, unknown: 0 };
+  c.total += 1;
+  if (status === 'unknown') c.unknown += 1; else c.ok += 1;
+  st.runs = c;
+  return st;
+}
+
+/** 稼働報告の { state, msg } を作る（副作用なし）。送ったらカウンタを 0 に戻す */
+function buildReport(state, now) {
+  var c = state.runs || { total: 0, ok: 0, unknown: 0 };
+  var since = state.last_report_at ? fmt(new Date(state.last_report_at)) : '設置時';
+  var label = { available: '在庫あり', out_of_stock: '在庫なし' };
+  var cur = (state.skus || []).map(function (s) {
+    return s.color + ' ' + s.storage + ' ￥' + Number(s.price).toLocaleString('ja-JP') +
+      (s.verdict === 'in_stock' ? '（在庫あり）' : s.verdict === 'out_of_stock' ? '' : '（確認不可）');
+  }).join(' / ');
+  var msg = since + ' から ' + c.total + '回確認（正常 ' + c.ok + ' / 確認不可 ' + c.unknown + '）\n' +
+    '※5分ごとなら24時間で約288回\n' +
+    '最終確認: ' + (state.last_checked || 'なし') + '\n' +
+    '最後に確定した状態: ' + (label[state.last_confirmed_status] || '未確定') +
+    (cur ? '\n' + cur : '') +
+    (state.unknown_since ? '\n確認不可が続いています（' + fmt(new Date(state.unknown_since)) + 'から）' : '');
+  var st = JSON.parse(JSON.stringify(state));
+  st.runs = { total: 0, ok: 0, unknown: 0 };
+  st.last_report_at = now.toISOString();
+  return { state: st, msg: { title: TITLE_REPORT, message: msg, priority: 2 } };
+}
+
 function fmt(d) {
   var j = new Date(d.getTime() + 9 * 3600000);
   return j.toISOString().slice(0, 16).replace('T', ' ') + ' JST';
@@ -138,6 +171,7 @@ function checkStock() {
       res = { status: 'unknown', skus: [], notes: ['取得エラー: ' + e.name] };
     }
     var d = decide(state, res, new Date());
+    d.state = countRun(d.state, res.status);
     d.msgs.forEach(function (m) {
       var ok = notify(m.title, m.message, m.priority);
       if (ok && m.marksAlert) d.state.unknown_alert_sent = true;
@@ -179,18 +213,36 @@ function notify(title, message, priority) {
 
 function testNotify() { notify('【テスト通知】', TEST_MESSAGE, 3); }
 
+/** 毎朝の稼働報告。前回報告からの確認回数などを ntfy に送る */
+function dailyReport() {
+  var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);  // 確認中なら終わるまで待つ
+  try {
+    var state = JSON.parse(props.getProperty('STATE') || 'null') || EMPTY_STATE;
+    var r = buildReport(state, new Date());
+    if (notify(r.msg.title, r.msg.message, r.msg.priority)) props.setProperty('STATE', JSON.stringify(r.state));
+    console.log(r.msg.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function setupTrigger() {
   removeTriggers();
   ScriptApp.newTrigger('checkStock').timeBased().everyMinutes(5).create();
-  console.log('5分ごとのトリガーを登録しました');
+  ScriptApp.newTrigger('dailyReport').timeBased().everyDays(1).atHour(REPORT_HOUR).create();
+  console.log('5分ごとの確認と、毎朝' + REPORT_HOUR + '時台の稼働報告を登録しました');
 }
 
 function removeTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'checkStock') ScriptApp.deleteTrigger(t);
+    var f = t.getHandlerFunction();
+    if (f === 'checkStock' || f === 'dailyReport') ScriptApp.deleteTrigger(t);
   });
 }
 
 function showState() { console.log(PropertiesService.getScriptProperties().getProperty('STATE')); }
 
-if (typeof module !== 'undefined') module.exports = { parseSkus: parseSkus, judge: judge, decide: decide, EMPTY_STATE: EMPTY_STATE };
+if (typeof module !== 'undefined') module.exports = { parseSkus: parseSkus, judge: judge, decide: decide,
+  countRun: countRun, buildReport: buildReport, EMPTY_STATE: EMPTY_STATE };
