@@ -1,7 +1,7 @@
 {
   "last_notified": [],
-  "last_confirmed_status": null,
-  "last_checked": null,
+  "last_confirmed_status": "out_of_stock",
+  "last_checked": "2026-11-02 14:28 JST",
   "unknown_since": null,
   "unknown_alert_sent": false,
   "configs": [],
