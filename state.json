@@ -1,0 +1,10 @@
+{
+  "last_notified": [],
+  "last_confirmed_status": null,
+  "last_checked": null,
+  "unknown_since": null,
+  "unknown_alert_sent": false,
+  "configs": [],
+  "last_error": null,
+  "heartbeat": null
+}
