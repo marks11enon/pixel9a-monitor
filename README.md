@@ -26,7 +26,8 @@ GitHub Actions  .github/workflows/notify.yml  ──>  ntfy.sh  ──>  iPhone
 
 以下は最初に作った GitHub Actions 版（Playwright でボタンまで確認する方式）の説明です。
 GitHub の定期実行が動かない不具合と、Actions の利用規約（ソフトウェア開発と関係ない用途の制限）への懸念から、
-GAS 版が安定したら停止する予定です。
+**2026-11-02 に GAS 版へ切り替え、`monitor` と `schedule-probe` ワークフローは無効化済み**（GitHub の Actions 画面で Disable）。
+再開する場合は `gh workflow enable monitor.yml -R marks11enon/pixel9a-monitor` のあと手動で1回起動する。
 
 ---
 
